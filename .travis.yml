@@ -1,6 +1,8 @@
 before_install:
-    sudo apt-get update
-    sudo apt-get install -y libjson-c-dev
-    sudo apt-get install -y libcurl
+  - sudo sudo apt-get update
+  - sudo apt-get install -y libjson-c-dev
+  - sudo apt-get install -y libcurl
+
 language: C
+
 script: ./build_all.sh
