@@ -23,7 +23,7 @@ CCFLAGS =  -Wall -W -Wmissing-declarations -Wmissing-prototypes -Wnested-externs
 # for all programs
 LNFLAGS = -ggdb -Wl,-rpath-link -lssl -lcrypto -lcsulcca
 
-all:		sign_sha384
+all:		sign_rsa_raw
 
 HEADERS = \
 	debug.h \
@@ -34,13 +34,13 @@ HEADERS = \
 
 # signer program
 
-sign_sha384:	sign_sha384.o \
+sign_rsa_raw:	sign_rsa_raw.o \
 		cca_functions.o cca_structures.o ossl_functions.o utils.o debug.o
-		$(CC) $(LNFLAGS) sign_sha384.o \
+		$(CC) $(LNFLAGS) sign_rsa_raw.o \
 		cca_functions.o cca_structures.o ossl_functions.o utils.o debug.o \
-		-o sign_sha384
+		-o sign_rsa_raw
 
-sign_sha384.o:			$(HEADERS)
+sign_rsa_raw.o:			$(HEADERS)
 cca_functions.o:		$(HEADERS)
 cca_structures.o:		$(HEADERS)
 debug.o:			$(HEADERS)
@@ -51,4 +51,4 @@ utils.o:			$(HEADERS)
 	$(CC) $(CCFLAGS) $<
 
 clean:
-	rm *.o sign_sha384
+	rm *.o sign_rsa_raw
