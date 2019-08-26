@@ -74,6 +74,13 @@ int Digital_Signature_Generate(unsigned long *signature_field_length,
 			       unsigned char *PKA_private_key,
 			       unsigned long hash_length,
 			       unsigned char *hash);
+int Digital_Signature_Generate_Zero_Padding(unsigned long *signature_field_length,
+			       unsigned long *signature_bit_length,
+			       unsigned char *signature_field,
+			       unsigned long PKA_private_key_length,
+			       unsigned char *PKA_private_key,
+			       unsigned long hash_length,
+			       unsigned char *hash);
 int Digital_Signature_Verify(unsigned long signature_field_length,
 			     unsigned char *signature_field,
 			     unsigned long key_token_length,

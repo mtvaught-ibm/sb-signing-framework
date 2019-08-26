@@ -179,17 +179,12 @@ int Sign(const char 	*keyFileName,
     size_t		keyTokenLength = 0;
     RsaKeyTokenPublic 	rsaKeyTokenPublic;	/* CCA public key structure */
     unsigned char	*digest = NULL;		/* received digest */
-    size_t 		digestLength = 0;      /* received digest length */
+    size_t 		payloadLength = 0;      /* received digest length */
 
-    /* http://tools.ietf.org/html/draft-ietf-smime-sha2-11 */
-    /* SHA-384 with RSA OID (Object Identifier) */
-    static const unsigned char sha384_rsa_oid[] = {0x30, 0x41, 0x30, 0x0D, 0x06, 0x09, 0x60, 0x86,
-	                                               0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05,
-	                                               0x00, 0x04, 0x30};
     /*
-      digest to be signed
+      payload to be signed
     */
-    unsigned char 	hash384[sizeof(sha384_rsa_oid) + SHA384_SIZE];	/* OID + SHA-384 digest */
+    unsigned char* 	payload = NULL;
     /*
       signature
     */
@@ -207,11 +202,11 @@ int Sign(const char 	*keyFileName,
                         "Error: Could not open key file: %s\n", keyFileName);
         }
     }
-    /* get the input digest */
+    /* get the input payload */
     if (rc == 0) {
         if (verbose) fprintf(messageFile, "Sign: Reading input file %s\n",
                              inputAttachmentFileName);
-        rc = File_ReadBinaryFile(&digest, &digestLength, SHA384_SIZE,
+        rc = File_ReadBinaryFile(&payload, &payloadLength, N_SIZE_MAX,
                                  inputAttachmentFileName);	/* freed @2 */
         if (rc != 0) {
             File_Printf(projectLogFile, messageFile,
@@ -244,35 +239,29 @@ int Sign(const char 	*keyFileName,
     /* check the incoming digest length */
     if (rc == 0) {
         if (verbose) fprintf(messageFile, "Sign: Checking input file length\n");
-        if (digestLength != SHA384_SIZE) {
+        unsigned int expectedLength = bitSize / 8;
+        if (payloadLength != expectedLength) {
             File_Printf(projectLogFile, messageFile,
                         "ERROR1019: attachment length %u not %u\n",
-                        digestLength, SHA384_SIZE);
+                        payloadLength, expectedLength);
             rc = ERROR_CODE;
         }
-    }
-    if (rc == 0) {
-        if (verbose) fprintf(messageFile, "Sign: Prepending OID\n");
-        /* prepend OID */
-        memcpy(hash384, sha384_rsa_oid, sizeof(sha384_rsa_oid));
-        /* append digest */
-        memcpy(hash384 + sizeof(sha384_rsa_oid), digest, SHA384_SIZE);
     }
     /* sign with the coprocessor.  The coprocessor doesn't know the digest algorithm.  It just
        signs an OID + digest1 */
     if (rc == 0) {
         if (verbose) PrintAll(messageFile,
-                              "Sign: hash to sign",
-                              sizeof(sha384_rsa_oid) + SHA384_SIZE,
-                              hash384);
+                              "Sign: payload to sign",
+                              payloadLength,
+                              payload);
         signatureLength = MOD_SIZE;
-        rc = Digital_Signature_Generate(&signatureLength,		/* i/o */
+        rc = Digital_Signature_Generate_Zero_Padding(&signatureLength,		/* i/o */
                                         &signatureBitLength,		/* output */
                                         signature,			/* output */
                                         keyTokenLength,			/* input */
                                         keyToken,			/* input */
-                                        sizeof(sha384_rsa_oid) + SHA384_SIZE, /* input */
-                                        hash384);			/* input */
+                                        payloadLength, /* input */
+                                        payload);			/* input */
 
     }
     /* create the audit log entry */
@@ -305,34 +294,34 @@ int Sign(const char 	*keyFileName,
         }
     }
     /* verify the signature with the coprocessor key CCA token */
-    if (rc == 0) {
-        if (verbose) fprintf(messageFile,
-                             "Sign: verify signature with the coprocessor key token\n");
-        rc = Digital_Signature_Verify(MOD_SIZE,			/* input */
-                                      signature,		/* input signature */
-                                      keyTokenLength,		/* input */
-                                      keyToken,			/* input key */
-                                      sizeof(sha384_rsa_oid) + SHA384_SIZE,	/* input */
-                                      hash384);			/* input hash */
-    }
-    /* code to verify the signature using openssl */
-    if (rc == 0) {
-        if (verbose) fprintf(messageFile,
-                             "Sign: verify signature with OpenSSL and the key token\n");
-        rc = osslVerify384(&valid,
-                           digest,			/* input: digest to be verified */
-                           rsaKeyTokenPublic.e,		/* exponent */
-                           rsaKeyTokenPublic.eLength,
-                           rsaKeyTokenPublic.n, 	/* public key */
-                           rsaKeyTokenPublic.nByteLength,
-                           signature,			/* signature */
-                           signatureLength);
-        if (!valid) {
-            File_Printf(projectLogFile, messageFile,
-                        "Sign: Error verifying signature with OpenSSL and the key token\n");
-            rc = ERROR_CODE;
-        }
-    }
+    //if (rc == 0) {
+    //    if (verbose) fprintf(messageFile,
+    //                         "Sign: verify signature with the coprocessor key token\n");
+    //    rc = Digital_Signature_Verify(MOD_SIZE,			/* input */
+    //                                  signature,		/* input signature */
+    //                                  keyTokenLength,		/* input */
+    //                                  keyToken,			/* input key */
+    //                                  sizeof(sha384_rsa_oid) + SHA384_SIZE,	/* input */
+    //                                  hash384);			/* input hash */
+    //}
+    ///* code to verify the signature using openssl */
+    //if (rc == 0) {
+    //    if (verbose) fprintf(messageFile,
+    //                         "Sign: verify signature with OpenSSL and the key token\n");
+    //    rc = osslVerify384(&valid,
+    //                       digest,			/* input: digest to be verified */
+    //                       rsaKeyTokenPublic.e,		/* exponent */
+    //                       rsaKeyTokenPublic.eLength,
+    //                       rsaKeyTokenPublic.n, 	/* public key */
+    //                       rsaKeyTokenPublic.nByteLength,
+    //                       signature,			/* signature */
+    //                       signatureLength);
+    //    if (!valid) {
+    //        File_Printf(projectLogFile, messageFile,
+    //                    "Sign: Error verifying signature with OpenSSL and the key token\n");
+    //        rc = ERROR_CODE;
+    //    }
+    //}
     /* write signature to the output attachment if supplied */
     if (rc == 0) {
         if (verbose) fprintf(messageFile, "Sign: Writing output file %s\n",
