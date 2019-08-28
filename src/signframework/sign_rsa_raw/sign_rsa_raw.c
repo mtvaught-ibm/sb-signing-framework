@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-/* This program sign an input SHA-384 digest with an RSA key
+/* This program sign an input payload with an RSA key
  */
 
 #include <stdio.h>
@@ -29,7 +29,7 @@
 #include "utils.h"
 #include "debug.h"
 
-/* local prototypes */
+// local prototypes
 
 int GetArgs(const char **outputBodyFilename,
             const char **usr,
@@ -54,9 +54,9 @@ int Sign(const char *keyFileName,
          unsigned int bitSize,
          FILE *projectLogFile);
 
-/* messages are traced here */
+// messages are traced here
 FILE *messageFile = NULL;
-/* FILE *frameworkLogFile = NULL;*/
+// FILE *frameworkLogFile = NULL;
 int verbose = FALSE;
 int debug = FALSE;
 unsigned int MOD_SIZE = N_SIZE;
@@ -75,12 +75,12 @@ int main(int argc, char **argv)
     const char *inputAttachmentFileName = NULL;
     const char *outputAttachmentFileName = NULL;
     const char *outputBodyFilename = NULL;
-    unsigned int bitSize = 4096; /* default RSA key size */
+    unsigned int bitSize = 4096; // default RSA key size
     int text = 0;
 
     messageFile = stdout;
 
-    /* get caller's command line arguments */
+    // get caller's command line arguments
     if (rc == 0)
     {
         rc = GetArgs(&outputBodyFilename,
@@ -97,20 +97,24 @@ int main(int argc, char **argv)
                      &verbose,
                      argc, argv);
     }
-    /* log in to CCA */
+    // log in to CCA
     if (rc == 0)
     {
         if (verbose)
+        {
             fprintf(messageFile, "Logging in with user name %s\n", usr);
-        rc = Login_Control(TRUE,      /* log in */
-                           usr,       /* CCA profile */
-                           password); /* CCA password */
+        }
+        rc = Login_Control(TRUE,      // log in
+                           usr,       // CCA profile
+                           password); // CCA password
     }
-    /* audit logging */
+    // audit logging
     if (rc == 0)
     {
         if (verbose)
+        {
             fprintf(messageFile, "Opening audit log %s\n", projectLogFileName);
+        }
         projectLogFile = fopen(projectLogFileName, "a");
         if (projectLogFile == NULL)
         {
@@ -119,11 +123,13 @@ int main(int argc, char **argv)
             rc = ERROR_CODE;
         }
     }
-    /* update audit log, begin this entry */
+    // update audit log, begin this entry
     if (projectLogFile != NULL)
     {
         if (verbose)
+        {
             fprintf(messageFile, "Updating audit log\n");
+        }
         log_time = time(NULL);
         fprintf(projectLogFile, "\n%s", ctime(&log_time));
         fprintf(projectLogFile, "\tSender: %s\n", sender);
@@ -132,17 +138,16 @@ int main(int argc, char **argv)
         fprintf(projectLogFile, "\tKey file: %s\n", keyFileName);
         fprintf(projectLogFile, "\tProfile %s\n", usr);
     }
-    /*
-      sign and verify
-    */
+
+    // sign and verify
     if (rc == 0)
     {
         if (verbose)
+        {
             fprintf(messageFile, "Signing\n");
-        if (verbose)
             fprintf(messageFile, "  Input attachment %s\n", inputAttachmentFileName);
-        if (verbose)
             fprintf(messageFile, "  Output attachment %s\n", outputAttachmentFileName);
+        }
         rc = Sign(keyFileName,
                   inputAttachmentFileName,
                   outputAttachmentFileName,
@@ -150,18 +155,20 @@ int main(int argc, char **argv)
                   bitSize,
                   projectLogFile);
     }
-    /* log out of CCA */
+    // log out of CCA
     if (rc == 0)
     {
         if (verbose)
+        {
             fprintf(messageFile, "Logging out with user name %s\n", usr);
-        rc = Login_Control(FALSE, /* log out */
-                           usr,   /* CCA profile */
-                           NULL); /* password */
+        }
+        rc = Login_Control(FALSE, // log out
+                           usr,   // CCA profile
+                           NULL); // password
     }
-    File_Printf(projectLogFile, messageFile,
-                "Return code: %u\n", rc);
-    /* clean up */
+    File_Printf(projectLogFile, messageFile, "Return code: %u\n", rc);
+
+    // clean up
     if (projectLogFile != NULL)
     {
         fclose(projectLogFile);
@@ -174,10 +181,7 @@ int main(int argc, char **argv)
     return rc;
 }
 
-/* Sign() signs and verifies a SHA-384 digest
-
- */
-
+// Sign() signs and verifies a SHA-384 digest
 int Sign(const char *keyFileName,
          const char *inputAttachmentFileName,
          const char *outputAttachmentFileName,
@@ -186,49 +190,44 @@ int Sign(const char *keyFileName,
          FILE *projectLogFile)
 {
     int rc = 0;
-    int valid = FALSE; /* true if signature verifies */
+    int valid = FALSE; // true if signature verifies
 
-    /*
-      signing key
-    */
-    unsigned char *keyToken = NULL; /* CCA key token */
+    // signing key
+    unsigned char *keyToken = NULL; // CCA key token
     size_t keyTokenLength = 0;
-    RsaKeyTokenPublic rsaKeyTokenPublic; /* CCA public key structure */
-    unsigned char *digest = NULL;        /* received digest */
-    size_t payloadLength = 0;            /* received digest length */
+    RsaKeyTokenPublic rsaKeyTokenPublic; // CCA public key structure
+    unsigned char *digest = NULL;        // received digest
+    size_t payloadLength = 0;            // received digest length
 
-    /*
-      payload to be signed
-    */
+    // payload to be signed
     unsigned char *payload = NULL;
-    /*
-      signature
-    */
+
+    // signature
     unsigned char signature[N_SIZE_MAX];
     unsigned long signatureLength = 0;
     unsigned long signatureBitLength = 0;
 
-    /* get the CCA key token */
+    // get the CCA key token
     if (rc == 0)
     {
         if (verbose)
             fprintf(messageFile, "Sign: Reading CCA key token file %s\n",
                     keyFileName);
-        rc = File_ReadBinaryFile(&keyToken, &keyTokenLength, 2000, keyFileName); /* freed @1 */
+        rc = File_ReadBinaryFile(&keyToken, &keyTokenLength, 2000, keyFileName); // freed @1
         if (rc != 0)
         {
             File_Printf(projectLogFile, messageFile,
                         "Error: Could not open key file: %s\n", keyFileName);
         }
     }
-    /* get the input payload */
+    // get the input payload
     if (rc == 0)
     {
         if (verbose)
             fprintf(messageFile, "Sign: Reading input file %s\n",
                     inputAttachmentFileName);
         rc = File_ReadBinaryFile(&payload, &payloadLength, N_SIZE_MAX,
-                                 inputAttachmentFileName); /* freed @2 */
+                                 inputAttachmentFileName); // freed @2
         if (rc != 0)
         {
             File_Printf(projectLogFile, messageFile,
@@ -236,7 +235,7 @@ int Sign(const char *keyFileName,
                         inputAttachmentFileName);
         }
     }
-    /* extract the CCA public key from the CCA key token  */
+    // extract the CCA public key from the CCA key token
     if (rc == 0)
     {
         if (verbose)
@@ -244,12 +243,12 @@ int Sign(const char *keyFileName,
                     (int)keyTokenLength);
         if (verbose)
             fprintf(messageFile, "Sign: extract the public key from CCA key token\n");
-        rc = getPKA96PublicKey(&rsaKeyTokenPublic, /* output: structure */
+        rc = getPKA96PublicKey(&rsaKeyTokenPublic, // output: structure
                                keyTokenLength,
-                               keyToken, /* input: PKA96 key token */
+                               keyToken, // input: PKA96 key token
                                bitSize);
     }
-    /* verify the public key length */
+    // verify the public key length
     if (rc == 0)
     {
         if (verbose)
@@ -263,7 +262,7 @@ int Sign(const char *keyFileName,
         }
     }
 
-    /* check the incoming digest length */
+    // check the incoming digest length
     if (rc == 0)
     {
         if (verbose)
@@ -277,8 +276,8 @@ int Sign(const char *keyFileName,
             rc = ERROR_CODE;
         }
     }
-    /* sign with the coprocessor.  The coprocessor doesn't know the digest algorithm.  It just
-       signs an OID + digest1 */
+    // sign with the coprocessor.  The coprocessor doesn't know the digest algorithm.  It just
+    // signs an OID + digest1
     if (rc == 0)
     {
         if (verbose)
@@ -287,38 +286,36 @@ int Sign(const char *keyFileName,
                      payloadLength,
                      payload);
         signatureLength = MOD_SIZE;
-        rc = Digital_Signature_Generate_Zero_Padding(&signatureLength,    /* i/o */
-                                                     &signatureBitLength, /* output */
-                                                     signature,           /* output */
-                                                     keyTokenLength,      /* input */
-                                                     keyToken,            /* input */
-                                                     payloadLength,       /* input */
-                                                     payload);            /* input */
+        rc = Digital_Signature_Generate_Zero_Padding(&signatureLength,    // i/o
+                                                     &signatureBitLength, // output
+                                                     signature,           // output
+                                                     keyTokenLength,      // input
+                                                     keyToken,            // input
+                                                     payloadLength,       // input
+                                                     payload);            // input
     }
-    /* create the audit log entry */
+    // create the audit log entry
     if (rc == 0)
     {
         if (verbose)
             fprintf(messageFile, "Sign: Updating audit log\n");
-        /* binary data as printable */
+        // binary data as printable
         char pubkey_string[N_SIZE_MAX * 4];
         char digest_string[SHA384_SIZE * 4];
         char sig_string[N_SIZE_MAX * 4];
 
-        /* get the user and group structures */
-        /* binary to printable */
+        // get the user and group structures
+        // binary to printable
         sprintAll(pubkey_string, MOD_SIZE, rsaKeyTokenPublic.n);
         sprintAll(digest_string, SHA384_SIZE, digest);
         sprintAll(sig_string, MOD_SIZE, signature);
-        /* send to audit log */
+        // send to audit log
         fprintf(projectLogFile, "\tPublic Key:\n %s\n", pubkey_string);
         fprintf(projectLogFile, "\tDigest:\n %s\n", digest_string);
         fprintf(projectLogFile, "\tSignature:\n %s\n", sig_string);
     }
-    /*
-      The verify functions should never fail.  They are just sanity checks on the code.
-    */
-    /* sanity check on the signature length */
+    // The verify functions should never fail.  They are just sanity checks on the code.
+    // sanity check on the signature length
     if (rc == 0)
     {
         if (signatureLength != MOD_SIZE)
@@ -328,7 +325,7 @@ int Sign(const char *keyFileName,
             rc = ERROR_CODE;
         }
     }
-    /* verify the signature with the coprocessor key CCA token */
+    // verify the signature with the coprocessor key CCA token
     //if (rc == 0) {
     //    if (verbose) fprintf(messageFile,
     //                         "Sign: verify signature with the coprocessor key token\n");
@@ -365,13 +362,13 @@ int Sign(const char *keyFileName,
                     outputAttachmentFileName);
         rc = File_WriteBinaryFile(signature, signatureLength, outputAttachmentFileName);
     }
-    /* write signature to the output body if specified */
+    // write signature to the output body if specified
     if ((rc == 0) && text)
     {
-        /* write the signature as hex ascii to the output body */
+        // write the signature as hex ascii to the output body
         if (rc == 0)
         {
-            char *signatureString = NULL; /* freed @3 */
+            char *signatureString = NULL; // freed @3
             if (rc == 0)
             {
                 rc = Malloc_Safe((unsigned char **)&signatureString,
@@ -384,17 +381,16 @@ int Sign(const char *keyFileName,
                 fprintf(messageFile, "Signature\n%s\n",
                         signatureString);
             }
-            free(signatureString); /* @3 */
+            free(signatureString); // @3
         }
     }
-    /* clean up */
-    free(keyToken); /* @1 */
-    free(digest);   /* @2 */
+    // clean up
+    free(keyToken); // @1
+    free(digest);   // @2
     return rc;
 }
 
-/* GetArgs() gets the command line arguments from the framework.
- */
+// GetArgs() gets the command line arguments from the framework.
 
 int GetArgs(const char **outputBodyFilename,
             const char **usr,
@@ -414,14 +410,14 @@ int GetArgs(const char **outputBodyFilename,
     long rc = 0;
     int i = 0;
     FILE *tmpFile = NULL;
-    char dummy = '\0'; /* extra characters */
+    char dummy = '\0'; // extra characters
 
-    /* command line argument defaults */
+    // command line argument defaults
     *outputBodyFilename = NULL;
     *text = FALSE;
     *verbose = FALSE;
 
-    /* get the command line arguments */
+    // get the command line arguments
     for (i = 1; (i < argc) && (rc == 0); i++)
     {
         if (strcmp(argv[i], "-obody") == 0)
@@ -431,7 +427,7 @@ int GetArgs(const char **outputBodyFilename,
             {
                 *outputBodyFilename = argv[i];
                 rc = File_Open(&tmpFile, *outputBodyFilename, "a");
-                /* switch messageFile from stdout ASAP so all messages get returned via email */
+                // switch messageFile from stdout ASAP so all messages get returned via email
                 if (rc == 0)
                 {
                     messageFile = tmpFile;
@@ -561,8 +557,8 @@ int GetArgs(const char **outputBodyFilename,
         {
             *text = TRUE;
         }
-        /* this allows the framework to probe whether the project specific program can be called.
-           The program should do nothing except return success. */
+        // this allows the framework to probe whether the project specific program can be called.
+        // The program should do nothing except return success.
         else if (strcmp(argv[i], "-h") == 0)
         {
             PrintUsage();
@@ -584,10 +580,10 @@ int GetArgs(const char **outputBodyFilename,
         {
             *verbose = TRUE;
         }
-        /* This code intentionally does not have an 'else error' clause.  The framework can in
-           general add command line arguments that are ignored by the project specific program. */
+        // This code intentionally does not have an 'else error' clause.  The framework can in
+        // general add command line arguments that are ignored by the project specific program.
     }
-    /* verify mandatory command line arguments */
+    // verify mandatory command line arguments
     if (rc == 0)
     {
         // If the usr isn't specified just use the sender
