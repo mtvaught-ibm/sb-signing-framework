@@ -1152,7 +1152,8 @@ long osslVerifyRSARaw(int *valid,			/* output boolean */
     if (verbose)
     {
         fprintf(messageFile, "osslVerifyRSARaw: Verifying using key token\n");
-        PrintAll(messageFile, "osslVerifyRSARaw: raw payload", rawPayloadSize, rawPayload);
+	// commenting out to reduce log file size
+        //PrintAll(messageFile, "osslVerifyRSARaw: raw payload", rawPayloadSize, rawPayload);
     }
     if (rc == 0)
     {
@@ -1164,7 +1165,15 @@ long osslVerifyRSARaw(int *valid,			/* output boolean */
 			     "\tosslVerifyRSA512: raw decrypt irc %d (should be key length)\n", irc);
         if(irc != -1)
         {
-            if(0 != memcmp(rawDecrypt, rawPayload, signature_size))
+            if(signature_size != rawPayloadSize)
+            {
+                rc = ERROR_CODE;
+                if(verbose)
+                {
+                    fprintf(messageFile, "\tosslVerifyRSARaw: raw payload size and signature size do not match %lu, %lu\n", rawPayloadSize, signature_size);
+                }
+            }
+            else if(0 != memcmp(rawDecrypt, rawPayload, signature_size))
             {
                 rc = ERROR_CODE;
                 if(verbose)

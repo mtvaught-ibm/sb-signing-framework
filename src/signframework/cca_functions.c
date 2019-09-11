@@ -737,8 +737,9 @@ int Digital_Signature_Generate_Zero_Padding(unsigned long *signature_field_lengt
 
     if (verbose) fprintf(messageFile,
                          "Digital_Signature_Generate: generate the digital signature\n");
-    if (verbose) PrintAll(messageFile,
-                          "  Digital_Signature_Generate: message raw payload", rawPayloadLength, rawPayload);
+    // Commenting this out to reduce verbose output file size
+    //if (verbose) PrintAll(messageFile,
+    //                      "  Digital_Signature_Generate: message raw payload", rawPayloadLength, rawPayload);
 
     exit_data_length = 0;		/* must be 0 */
 

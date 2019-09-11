@@ -321,9 +321,10 @@ int Sign(const char *keyFileName,
             fprintf(messageFile, "Sign: Updating audit log\n");
         }
         // binary data as printable
-        char pubkey_string[MAX_SUPPORTED_KEY_SIZE_BYTES * 2];
-        char payload_string[MAX_SUPPORTED_KEY_SIZE_BYTES * 2];
-        char sig_string[MAX_SUPPORTED_KEY_SIZE_BYTES * 2];
+        // Needs to be x4 instead of x2 due to whitespace/formatting being added
+        char pubkey_string[MAX_SUPPORTED_KEY_SIZE_BYTES * 4 + 1];
+        char payload_string[MAX_SUPPORTED_KEY_SIZE_BYTES * 4 + 1];
+        char sig_string[MAX_SUPPORTED_KEY_SIZE_BYTES * 4 + 1];
 
         // get the user and group structures
         // binary to printable
@@ -342,7 +343,7 @@ int Sign(const char *keyFileName,
         if (signatureLength != currentRsaModSize)
         {
             File_Printf(projectLogFile, messageFile,
-                        "ERROR1001: signature invalid length %lu\n", signatureLength);
+                        "ERROR1001: signature invalid length %lu, expected: %lu\n", signatureLength, currentRsaModSize);
             rc = ERROR_CODE;
         }
     }
@@ -594,7 +595,7 @@ int GetArgs(const char **outputBodyFilename,
         {
             i++;
             int irc = sscanf(argv[i], "%u%c", bitSize, &dummy);
-            if (irc != 1 || *bitSize != RSA_2048_BIT_SIZE || *bitSize != RSA_4096_BIT_SIZE)
+            if (irc != 1 || (*bitSize != RSA_2048_BIT_SIZE && *bitSize != RSA_4096_BIT_SIZE))
             {
                 fprintf(messageFile,
                         "ERROR1009: -sz illegal\n");
@@ -679,10 +680,10 @@ int GetArgs(const char **outputBodyFilename,
     }
     if (rc == 0)
     {
-        if(RSA_2048_BIT_SIZE != *bitSize || RSA_4096_BIT_SIZE != *bitSize)
+        if(RSA_2048_BIT_SIZE != *bitSize && RSA_4096_BIT_SIZE != *bitSize)
         {
             fprintf(messageFile,
-                    "ERROR1020: -sz unsupported size\n");
+                    "ERROR1020: -sz (%u) unsupported size\n", *bitSize);
             rc = ERROR_CODE;
         }
     }
