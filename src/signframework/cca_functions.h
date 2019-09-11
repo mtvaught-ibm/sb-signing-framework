@@ -87,6 +87,12 @@ int Digital_Signature_Verify(unsigned long signature_field_length,
 			     unsigned char *key_token,
 			     unsigned long hash_length,
 			     unsigned char *hash);
+int Digital_Signature_Verify_Zero_Padding(unsigned long signature_field_length,
+			     					      unsigned char *signature_field,
+			     					      unsigned long key_token_length,
+			     					      unsigned char *key_token,
+			     					      unsigned long rawPayloadLength,
+			     					      unsigned char *rawPayload);
 
 void CCA_PrintError(long return_code,
 		    long reason_code);

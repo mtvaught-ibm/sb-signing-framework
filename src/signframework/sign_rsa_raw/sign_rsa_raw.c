@@ -54,12 +54,24 @@ int Sign(const char *keyFileName,
          unsigned int bitSize,
          FILE *projectLogFile);
 
+enum
+{
+    RSA_4096_BIT_SIZE = 4096,
+    RSA_2048_BIT_SIZE = 2048,
+    DEFAULT_KEY_SIZE_BITS = RSA_4096_BIT_SIZE,
+    MAX_SUPPORTED_KEY_SIZE_BYTES = RSA_4096_BIT_SIZE / 8,
+};
+
+enum
+{
+    MAX_SUPPORTED_KEY_TOKEN_SIZE = 2000,
+};
+
 // messages are traced here
 FILE *messageFile = NULL;
 // FILE *frameworkLogFile = NULL;
 int verbose = FALSE;
 int debug = FALSE;
-unsigned int MOD_SIZE = N_SIZE;
 
 int main(int argc, char **argv)
 {
@@ -75,7 +87,7 @@ int main(int argc, char **argv)
     const char *inputAttachmentFileName = NULL;
     const char *outputAttachmentFileName = NULL;
     const char *outputBodyFilename = NULL;
-    unsigned int bitSize = 4096; // default RSA key size
+    unsigned int bitSize = DEFAULT_KEY_SIZE_BITS; // default RSA key size
     int text = 0;
 
     messageFile = stdout;
@@ -181,7 +193,7 @@ int main(int argc, char **argv)
     return rc;
 }
 
-// Sign() signs and verifies a SHA-384 digest
+// Sign() signs and verifies an pre-padded arbitrary binary blob
 int Sign(const char *keyFileName,
          const char *inputAttachmentFileName,
          const char *outputAttachmentFileName,
@@ -191,19 +203,19 @@ int Sign(const char *keyFileName,
 {
     int rc = 0;
     int valid = FALSE; // true if signature verifies
+    const unsigned int currentRsaModSize = bitSize / 8;
 
     // signing key
     unsigned char *keyToken = NULL; // CCA key token
     size_t keyTokenLength = 0;
     RsaKeyTokenPublic rsaKeyTokenPublic; // CCA public key structure
-    unsigned char *digest = NULL;        // received digest
-    size_t payloadLength = 0;            // received digest length
 
     // payload to be signed
     unsigned char *payload = NULL;
+    size_t payloadLength = 0;
 
     // signature
-    unsigned char signature[N_SIZE_MAX];
+    unsigned char signature[MAX_SUPPORTED_KEY_SIZE_BYTES];
     unsigned long signatureLength = 0;
     unsigned long signatureBitLength = 0;
 
@@ -211,22 +223,23 @@ int Sign(const char *keyFileName,
     if (rc == 0)
     {
         if (verbose)
-            fprintf(messageFile, "Sign: Reading CCA key token file %s\n",
-                    keyFileName);
-        rc = File_ReadBinaryFile(&keyToken, &keyTokenLength, 2000, keyFileName); // freed @1
+        {
+            fprintf(messageFile, "Sign: Reading CCA key token file %s\n", keyFileName);
+        }
+        rc = File_ReadBinaryFile(&keyToken, &keyTokenLength, MAX_SUPPORTED_KEY_TOKEN_SIZE, keyFileName); // freed @1
         if (rc != 0)
         {
-            File_Printf(projectLogFile, messageFile,
-                        "Error: Could not open key file: %s\n", keyFileName);
+            File_Printf(projectLogFile, messageFile, "Error: Could not open key file: %s\n", keyFileName);
         }
     }
     // get the input payload
     if (rc == 0)
     {
         if (verbose)
-            fprintf(messageFile, "Sign: Reading input file %s\n",
-                    inputAttachmentFileName);
-        rc = File_ReadBinaryFile(&payload, &payloadLength, N_SIZE_MAX,
+        {
+            fprintf(messageFile, "Sign: Reading input file %s\n", inputAttachmentFileName);
+        }
+        rc = File_ReadBinaryFile(&payload, &payloadLength, MAX_SUPPORTED_KEY_SIZE_BYTES,
                                  inputAttachmentFileName); // freed @2
         if (rc != 0)
         {
@@ -239,10 +252,10 @@ int Sign(const char *keyFileName,
     if (rc == 0)
     {
         if (verbose)
-            fprintf(messageFile, "Sign: key token length %d\n",
-                    (int)keyTokenLength);
-        if (verbose)
+        {
+            fprintf(messageFile, "Sign: key token length %u\n", (unsigned int)keyTokenLength);
             fprintf(messageFile, "Sign: extract the public key from CCA key token\n");
+        }
         rc = getPKA96PublicKey(&rsaKeyTokenPublic, // output: structure
                                keyTokenLength,
                                keyToken, // input: PKA96 key token
@@ -252,8 +265,10 @@ int Sign(const char *keyFileName,
     if (rc == 0)
     {
         if (verbose)
+        {
             fprintf(messageFile, "Sign: public key length %u\n", rsaKeyTokenPublic.nByteLength);
-        if (rsaKeyTokenPublic.nByteLength != (bitSize / 8))
+        }
+        if (rsaKeyTokenPublic.nByteLength != currentRsaModSize)
         {
             File_Printf(projectLogFile, messageFile,
                         "ERROR1019: public key length invalid %u\n",
@@ -262,12 +277,14 @@ int Sign(const char *keyFileName,
         }
     }
 
-    // check the incoming digest length
+    // check the incoming payload length
     if (rc == 0)
     {
         if (verbose)
+        {
             fprintf(messageFile, "Sign: Checking input file length\n");
-        unsigned int expectedLength = bitSize / 8;
+        }
+        unsigned int expectedLength = currentRsaModSize;
         if (payloadLength != expectedLength)
         {
             File_Printf(projectLogFile, messageFile,
@@ -276,16 +293,18 @@ int Sign(const char *keyFileName,
             rc = ERROR_CODE;
         }
     }
-    // sign with the coprocessor.  The coprocessor doesn't know the digest algorithm.  It just
-    // signs an OID + digest1
+    // sign with the coprocessor.  The coprocessor doesn't know the digest algorithm. It just signs
+    // the payload (padded out to the key size)
     if (rc == 0)
     {
         if (verbose)
-            PrintAll(messageFile,
-                     "Sign: payload to sign",
-                     payloadLength,
-                     payload);
-        signatureLength = MOD_SIZE;
+        {
+            PrintAll(messageFile, "Sign: payload to sign", payloadLength, payload);
+        }
+        signatureLength = currentRsaModSize;
+
+        // Since the payload being passed in is already the key size, no padding should be done on
+        // it. A padding scheme must be chosen, so use zero padding.
         rc = Digital_Signature_Generate_Zero_Padding(&signatureLength,    // i/o
                                                      &signatureBitLength, // output
                                                      signature,           // output
@@ -298,27 +317,29 @@ int Sign(const char *keyFileName,
     if (rc == 0)
     {
         if (verbose)
+        {
             fprintf(messageFile, "Sign: Updating audit log\n");
+        }
         // binary data as printable
-        char pubkey_string[N_SIZE_MAX * 4];
-        char digest_string[SHA384_SIZE * 4];
-        char sig_string[N_SIZE_MAX * 4];
+        char pubkey_string[MAX_SUPPORTED_KEY_SIZE_BYTES * 2];
+        char payload_string[MAX_SUPPORTED_KEY_SIZE_BYTES * 2];
+        char sig_string[MAX_SUPPORTED_KEY_SIZE_BYTES * 2];
 
         // get the user and group structures
         // binary to printable
-        sprintAll(pubkey_string, MOD_SIZE, rsaKeyTokenPublic.n);
-        sprintAll(digest_string, SHA384_SIZE, digest);
-        sprintAll(sig_string, MOD_SIZE, signature);
+        sprintAll(pubkey_string, currentRsaModSize, rsaKeyTokenPublic.n);
+        sprintAll(payload_string, currentRsaModSize, payload);
+        sprintAll(sig_string, currentRsaModSize, signature);
         // send to audit log
         fprintf(projectLogFile, "\tPublic Key:\n %s\n", pubkey_string);
-        fprintf(projectLogFile, "\tDigest:\n %s\n", digest_string);
+        fprintf(projectLogFile, "\tRaw Payload:\n %s\n", payload_string);
         fprintf(projectLogFile, "\tSignature:\n %s\n", sig_string);
     }
     // The verify functions should never fail.  They are just sanity checks on the code.
     // sanity check on the signature length
     if (rc == 0)
     {
-        if (signatureLength != MOD_SIZE)
+        if (signatureLength != currentRsaModSize)
         {
             File_Printf(projectLogFile, messageFile,
                         "ERROR1001: signature invalid length %lu\n", signatureLength);
@@ -326,35 +347,40 @@ int Sign(const char *keyFileName,
         }
     }
     // verify the signature with the coprocessor key CCA token
-    //if (rc == 0) {
-    //    if (verbose) fprintf(messageFile,
-    //                         "Sign: verify signature with the coprocessor key token\n");
-    //    rc = Digital_Signature_Verify(MOD_SIZE,			/* input */
-    //                                  signature,		/* input signature */
-    //                                  keyTokenLength,		/* input */
-    //                                  keyToken,			/* input key */
-    //                                  sizeof(sha384_rsa_oid) + SHA384_SIZE,	/* input */
-    //                                  hash384);			/* input hash */
-    //}
-    ///* code to verify the signature using openssl */
-    //if (rc == 0) {
-    //    if (verbose) fprintf(messageFile,
-    //                         "Sign: verify signature with OpenSSL and the key token\n");
-    //    rc = osslVerify384(&valid,
-    //                       digest,			/* input: digest to be verified */
-    //                       rsaKeyTokenPublic.e,		/* exponent */
-    //                       rsaKeyTokenPublic.eLength,
-    //                       rsaKeyTokenPublic.n, 	/* public key */
-    //                       rsaKeyTokenPublic.nByteLength,
-    //                       signature,			/* signature */
-    //                       signatureLength);
-    //    if (!valid) {
-    //        File_Printf(projectLogFile, messageFile,
-    //                    "Sign: Error verifying signature with OpenSSL and the key token\n");
-    //        rc = ERROR_CODE;
-    //    }
-    //}
-    /* write signature to the output attachment if supplied */
+    if (rc == 0) {
+        if (verbose)
+        {
+            fprintf(messageFile, "Sign: verify signature with the coprocessor key token\n");
+        }
+        rc = Digital_Signature_Verify_Zero_Padding(currentRsaModSize,    /* input */
+                                                   signature,            /* input signature */
+                                                   keyTokenLength,		/* input */
+                                                   keyToken,             /* input key */
+                                                   payloadLength,        /* input */
+                                                   payload);             /* input hash */
+    }
+    // code to verify the signature using openssl
+    if (rc == 0) {
+        if (verbose)
+        {
+            fprintf(messageFile, "Sign: verify signature with OpenSSL and the key token\n");
+        }
+        rc = osslVerifyRaw(&valid,
+                              payload,			/* input: digest to be verified */
+                              payloadLength,
+                              rsaKeyTokenPublic.e,		/* exponent */
+                              rsaKeyTokenPublic.eLength,
+                              rsaKeyTokenPublic.n, 	/* public key */
+                              rsaKeyTokenPublic.nByteLength,
+                              signature,			/* signature */
+                              signatureLength);
+        if (!valid) {
+            File_Printf(projectLogFile, messageFile,
+                        "Sign: Error verifying signature with OpenSSL and the key token\n");
+            rc = ERROR_CODE;
+        }
+    }
+    // write signature to the output attachment if supplied
     if (rc == 0)
     {
         if (verbose)
@@ -386,7 +412,7 @@ int Sign(const char *keyFileName,
     }
     // clean up
     free(keyToken); // @1
-    free(digest);   // @2
+    free(payload);   // @2
     return rc;
 }
 
@@ -568,8 +594,7 @@ int GetArgs(const char **outputBodyFilename,
         {
             i++;
             int irc = sscanf(argv[i], "%u%c", bitSize, &dummy);
-            if (irc != 1 || *bitSize < N_BIT_SIZE ||
-                *bitSize > N_BIT_SIZE_MAX)
+            if (irc != 1 || *bitSize != RSA_2048_BIT_SIZE || *bitSize != RSA_4096_BIT_SIZE)
             {
                 fprintf(messageFile,
                         "ERROR1009: -sz illegal\n");
@@ -654,15 +679,7 @@ int GetArgs(const char **outputBodyFilename,
     }
     if (rc == 0)
     {
-        if (*bitSize == N_BIT_SIZE)
-        {
-            MOD_SIZE = N_SIZE;
-        }
-        else if (*bitSize == N_BIT_SIZE_MAX)
-        {
-            MOD_SIZE = N_SIZE_MAX;
-        }
-        else
+        if(RSA_2048_BIT_SIZE != *bitSize || RSA_4096_BIT_SIZE != *bitSize)
         {
             fprintf(messageFile,
                     "ERROR1020: -sz unsupported size\n");
